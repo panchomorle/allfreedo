@@ -250,15 +250,14 @@ export async function createTasksFromTemplate(
     // Create the new task
     const taskData = {
       room_id: template.room_id,
+      task_template_id: template.id,
       name: template.name,
       description: template.description,
-      assigned_roomie_id: assignedRoomie.id,
       weight: template.weight,
       is_done: false,
       scheduled_date: scheduledDate.toISOString().slice(0, 10),
-      recurring: template.recurring,
-      recurrence_pattern: template.recurrence_pattern,
-      template_id: template.id,
+      done_by: null,
+      assigned_roomie_id: assignedRoomie.id,
     };
 
     const taskResult = await createTask(taskData);
@@ -288,5 +287,93 @@ export async function createTasksFromTemplate(
       error: "An unexpected error occurred while creating task from template",
       success: false,
     };
+  }
+}
+
+export async function hasTaskBeenCreatedToday(templateId: number): Promise<boolean> {
+  const supabase = await createClient();
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('task_template_id', templateId)
+      .gte('scheduled_date', today.toISOString())
+      .lt('scheduled_date', tomorrow.toISOString())
+      .single();
+
+    if (error) {
+      console.error('Error checking task creation:', error);
+      return false;
+    }
+
+    return !!data;
+  } catch (error) {
+    console.error('Error checking task creation:', error);
+    return false;
+  }
+}
+
+export async function createTaskFromTemplate(templateId: number): Promise<{ success: boolean; error: string | null }> {
+  const supabase = await createClient();
+  try {
+    // First check if a task has already been created today
+    const hasBeenCreated = await hasTaskBeenCreatedToday(templateId);
+    if (hasBeenCreated) {
+      return { success: false, error: 'A task from this template has already been created today' };
+    }
+
+    // Get the template
+    const { data: template, error: templateError } = await supabase
+      .from('task_templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
+
+    if (templateError || !template) {
+      return { success: false, error: 'Template not found' };
+    }
+
+    // Get the current roomie
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data: roomie, error: roomieError } = await supabase
+      .from('roomies')
+      .select('id')
+      .eq('auth_uuid', user.id)
+      .single();
+
+    if (roomieError || !roomie) {
+      return { success: false, error: 'Roomie not found' };
+    }
+
+    // Create the task
+    const { error: insertError } = await supabase
+      .from('tasks')
+      .insert({
+        room_id: template.room_id,
+        task_template_id: template.id,
+        name: template.name,
+        description: template.description,
+        weight: template.weight,
+        scheduled_date: new Date().toISOString(),
+        assigned_roomie_id: roomie.id
+      });
+
+    if (insertError) {
+      return { success: false, error: 'Failed to create task' };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error creating task from template:', error);
+    return { success: false, error: 'An unexpected error occurred' };
   }
 } 

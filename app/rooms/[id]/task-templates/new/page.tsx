@@ -14,7 +14,7 @@ import { ArrowLeft } from "lucide-react";
 import { getCurrentRoomie } from "@/app/actions/auth";
 import { getRoomById } from "@/app/actions/rooms";
 import { createTaskTemplate } from "@/app/actions/task-templates";
-import { Roomie, Room } from "@/lib/types";
+import { Roomie, Room, RecurrenceRule, DaysOfWeek } from "@/lib/types";
 
 export default function NewTaskTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -28,7 +28,11 @@ export default function NewTaskTemplatePage({ params }: { params: Promise<{ id: 
   const [description, setDescription] = useState("");
   const [weight, setWeight] = useState(1);
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrencePattern, setRecurrencePattern] = useState<string>("weekly");
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule>({
+    frequency: 'weekly',
+    interval: 1,
+    byDay: ['friday']
+  });
   
   const { id } = use(params);
   const roomId = parseInt(id);
@@ -91,7 +95,7 @@ export default function NewTaskTemplatePage({ params }: { params: Promise<{ id: 
         description,
         weight,
         recurring: isRecurring,
-        recurrence_rule: isRecurring ? recurrencePattern : null,
+        recurrence_rule: isRecurring ? JSON.stringify(recurrenceRule) : null,
         created_by: currentRoomie.id,
       });
       
@@ -198,19 +202,101 @@ export default function NewTaskTemplatePage({ params }: { params: Promise<{ id: 
             </div>
             
             {isRecurring && (
-              <div className="space-y-2 pl-6 border-l-2 border-gray-200">
-                <Label htmlFor="recurrencePattern">Recurrence Pattern</Label>
-                <Select value={recurrencePattern} onValueChange={setRecurrencePattern}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select recurrence pattern" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4 pl-6 border-l-2 border-gray-200">
+                <div className="space-y-2">
+                  <Label htmlFor="recurrencePattern">Frequency</Label>
+                  <Select 
+                    value={recurrenceRule.frequency} 
+                    onValueChange={(value: RecurrenceRule['frequency']) => 
+                      setRecurrenceRule(prev => ({ ...prev, frequency: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(recurrenceRule.frequency === 'weekly' || recurrenceRule.frequency === 'biweekly') && (
+                  <div className="space-y-2">
+                    <Label>Days of Week</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {DaysOfWeek.map((day: typeof DaysOfWeek[number]) => (
+                        <div key={day} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={day}
+                            checked={recurrenceRule.byDay?.includes(day)}
+                            onChange={(e) => {
+                              const newDays = e.target.checked
+                                ? [...(recurrenceRule.byDay || []), day]
+                                : (recurrenceRule.byDay || []).filter(d => d !== day);
+                              setRecurrenceRule(prev => ({ ...prev, byDay: newDays }));
+                            }}
+                          />
+                          <Label htmlFor={day} className="capitalize">{day}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {recurrenceRule.frequency === 'monthly' && (
+                  <div className="space-y-2">
+                    <Label>Days of Month</Label>
+                    <div className="grid grid-cols-7 gap-1">
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                        <div key={day} className="flex items-center space-x-1">
+                          <input
+                            type="checkbox"
+                            id={`day-${day}`}
+                            checked={recurrenceRule.byMonthDay?.includes(day)}
+                            onChange={(e) => {
+                              const newDays = e.target.checked
+                                ? [...(recurrenceRule.byMonthDay || []), day]
+                                : (recurrenceRule.byMonthDay || []).filter(d => d !== day);
+                              setRecurrenceRule(prev => ({ ...prev, byMonthDay: newDays }));
+                            }}
+                          />
+                          <Label htmlFor={`day-${day}`} className="text-sm">{day}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {recurrenceRule.frequency === 'yearly' && (
+                  <div className="space-y-2">
+                    <Label>Months</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                        <div key={month} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`month-${month}`}
+                            checked={recurrenceRule.byMonth?.includes(month)}
+                            onChange={(e) => {
+                              const newMonths = e.target.checked
+                                ? [...(recurrenceRule.byMonth || []), month]
+                                : (recurrenceRule.byMonth || []).filter(m => m !== month);
+                              setRecurrenceRule(prev => ({ ...prev, byMonth: newMonths }));
+                            }}
+                          />
+                          <Label htmlFor={`month-${month}`} className="capitalize">
+                            {new Date(2000, month - 1).toLocaleString('default', { month: 'long' })}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

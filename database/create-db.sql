@@ -32,10 +32,14 @@ CREATE TABLE IF NOT EXISTS task_templates (
     name TEXT NOT NULL,
     description TEXT NOT NULL,
     weight INTEGER NOT NULL,
-    recurrence_rule TEXT NOT NULL, -- Example: cron format or JSON with periodicity
+    recurring BOOLEAN NOT NULL DEFAULT false,
+    recurrence_rule JSONB,
     last_assigned_roomie_id INTEGER,
+    created_by INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     FOREIGN KEY (room_id) REFERENCES rooms (id) ON DELETE CASCADE,
-    FOREIGN KEY (last_assigned_roomie_id) REFERENCES roomies (id)
+    FOREIGN KEY (last_assigned_roomie_id) REFERENCES roomies (id),
+    FOREIGN KEY (created_by) REFERENCES roomies (id)
 );
 
 -- Tasks table (concrete instances)

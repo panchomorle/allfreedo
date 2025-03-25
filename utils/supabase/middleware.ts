@@ -35,24 +35,28 @@ export const updateSession = async (request: NextRequest) => {
       },
     );
 
-    // This will refresh session if expired - required for Server Components
-    // https://supabase.com/docs/guides/auth/server-side/nextjs
-    const user = await supabase.auth.getUser();
+    // Refresh session if expired
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (
-      !user &&
-      !request.nextUrl.pathname.startsWith('/sign-in') &&
-      !request.nextUrl.pathname.startsWith('/auth')
-    ) {
-      console.log('Redirecting to /login: ', user);
+    // Define public paths that don't require authentication
+    const publicPaths = ['/sign-in', '/auth'];
+    const isPublicPath = publicPaths.some(path => 
+      request.nextUrl.pathname.startsWith(path)
+    );
+
+    // If user is not authenticated and trying to access protected route
+    if (!user && !isPublicPath) {
       return NextResponse.redirect(new URL('/sign-in', request.url));
+    }
+
+    // If user is authenticated and trying to access auth pages
+    if (user && isPublicPath) {
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
     return response;
   } catch (e) {
-    // If you are here, a Supabase client could not be created!
-    // This is likely because you have not set up environment variables.
-    // Check out http://localhost:3000 for Next Steps.
+    // If there's an error, allow the request to continue
     return NextResponse.next({
       request: {
         headers: request.headers,

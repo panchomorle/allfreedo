@@ -12,11 +12,12 @@ import { Roomie, Room } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useUser } from "@/contexts/user-context";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function RoomDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [room, setRoom] = useState<Room | null>(null);
-  const { roomie: currentRoomie } = useUser();
+  const { roomie: currentRoomie, loading: userLoading } = useUser();
   const [roomies, setRoomies] = useState<Roomie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,11 @@ export default function RoomDetailPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      if (!currentRoomie){ router.push("/sign-in"); return;}
+      if (!currentRoomie && !userLoading){
+        console.log("User not found, redirecting to sign-in");
+        console.log("roomie: ", currentRoomie);
+        console.log("userLoading: ", userLoading);
+        router.push("/sign-in"); return;}
       // Get room details
       const { data: roomData, error: roomError } = await getRoomById(roomId);
       
@@ -198,9 +203,22 @@ export default function RoomDetailPage({ params }: { params: Promise<{ id: strin
                 <div className="space-y-4">
                   {roomies.map((roomie) => (
                     <div key={roomie.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <User size={20} className="text-blue-600" />
-                      </div>
+                      <Avatar>
+                        {roomie.avatar ? (
+                          <AvatarImage 
+                            src={roomie.avatar} 
+                            alt={roomie.name}
+                            onError={(e) => {
+                              // If image fails to load, it will show the fallback
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <AvatarFallback>
+                            <User size={20} className="text-blue-600" />
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
                       <div>
                         <p className="font-medium">{roomie.name}</p>
                         {roomie.id === currentRoomie?.id && (

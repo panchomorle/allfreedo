@@ -15,11 +15,10 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [roomie, setRoomie] = useState<Roomie | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const mounted = useRef(false);
 
     const setData = useCallback(async () => {
-        setLoading(true);
         console.log("loading set to true: ", loading);
         try {
           const { roomie } = await getCurrentRoomie();
@@ -49,6 +48,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const refreshRoomie = async () => {
+    setLoading(true);
     setData();
   };
 

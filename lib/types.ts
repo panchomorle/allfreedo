@@ -11,8 +11,7 @@ export interface Roomie {
   id: number;
   name: string;
   user_id: string;
-  profile_image?: string | null;
-  created_at: string;
+  avatar?: string | null;
 }
 
 export interface Task {
@@ -24,10 +23,9 @@ export interface Task {
   weight: number;
   is_done: boolean;
   done_date?: string | null;
+  done_by?: number | null;
   scheduled_date: string | null;
-  recurring: boolean;
-  recurrence_pattern?: string | null;
-  template_id?: number | null;
+  task_template_id?: number | null;
   created_at: string;
 }
 
@@ -52,7 +50,25 @@ export interface TaskRating {
   created_at: string;
 }
 
-export type RecurrencePattern = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+export const DaysOfWeek = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday"
+] as const;
+
+export type DayOfWeek = typeof DaysOfWeek[number];
+
+export type RecurrenceRule = {
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+  interval: number;
+  byDay?: DayOfWeek[];
+  byMonthDay?: number[];
+  byMonth?: number[];
+};
 
 export type ResponseData<T> = {
   data?: T;

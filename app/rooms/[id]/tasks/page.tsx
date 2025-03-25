@@ -10,10 +10,12 @@ import { getRoomById } from "@/app/actions/rooms";
 import { getTasks, markTaskAsDone, processRecurringTasks } from "@/app/actions/tasks";
 import { getTaskAverageRating, hasRoomieRatedTask } from "@/app/actions/task-ratings";
 import { getRoomiesInRoom } from "@/app/actions/roomies";
-import { Roomie, Room, Task } from "@/lib/types";
+import { getTaskTemplates, createTaskFromTemplate } from "@/app/actions/task-templates";
+import { Roomie, Room, Task, TaskTemplate, RecurrenceRule } from "@/lib/types";
 import { TaskCard } from "@/components/task/task-card";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
+import { isTemplateMatchingToday } from "@/lib/utils/recurring-tasks";
 
 export default function RoomTasksPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -29,6 +31,8 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
   const [hasRated, setHasRated] = useState<Record<number, boolean>>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [creatingTask, setCreatingTask] = useState<number | null>(null);
   
   const { id } = use(params);
   const roomId = parseInt(id);
@@ -39,11 +43,21 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
       
       try {
         // Get current roomie
-        const { roomie } = await getCurrentRoomie();
+        const { roomie, error: roomieError } = await getCurrentRoomie();
+        
+        // Handle auth errors
+        if (roomieError?.includes('Auth session missing')) {
+          console.log('Auth session missing, redirecting to sign-in');
+          router.push("/sign-in");
+          return;
+        }
+        
         if (!roomie) {
+          console.log('No roomie found, redirecting to create profile');
           router.push("/create-profile");
           return;
         }
+        
         setCurrentRoomie(roomie);
         
         // Get room details
@@ -117,9 +131,22 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
         setTaskRatings(ratingsMap);
         setHasRated(hasRatedMap);
         
+        // Get task templates
+        const { data: templatesData, error: templatesError } = await getTaskTemplates(roomId);
+        if (!templatesError && templatesData) {
+          console.log('Loaded templates:', templatesData);
+          setTemplates(templatesData);
+        }
+        
         setLoading(false);
       } catch (e) {
         console.error("Error loading data:", e);
+        // Check if it's an auth error
+        if (e instanceof Error && e.message.includes('Auth session missing')) {
+          console.log('Auth session missing, redirecting to sign-in');
+          router.push("/sign-in");
+          return;
+        }
         setError("An unexpected error occurred");
         setLoading(false);
       }
@@ -153,6 +180,29 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
     task.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     task.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleCreateTaskFromTemplate = async (templateId: number) => {
+    setCreatingTask(templateId);
+    setError(null);
+    
+    try {
+      const { success, error } = await createTaskFromTemplate(templateId);
+      
+      if (!success || error) {
+        setError(error || "Failed to create task from template");
+        setCreatingTask(null);
+        return;
+      }
+      
+      // Refresh the data
+      setRefreshKey(prev => prev + 1);
+    } catch (e) {
+      console.error("Error creating task from template:", e);
+      setError("An unexpected error occurred");
+    } finally {
+      setCreatingTask(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -281,6 +331,77 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
           )
         )}
       </div>
+      
+      {/* Add section for today's matching templates */}
+      {templates.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Calendar size={20} />
+            Today's Tasks
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {templates
+              .filter(template => {
+                if (!template.recurring || !template.recurrence_rule) {
+                  console.log('Template not recurring or no rule:', template);
+                  return false;
+                }
+                
+                try {
+                  const rule = JSON.parse(template.recurrence_rule);
+                  console.log('Checking template:', {
+                    templateName: template.name,
+                    rule
+                  });
+                  return isTemplateMatchingToday(rule);
+                } catch (e) {
+                  console.error('Error parsing recurrence rule:', e);
+                  return false;
+                }
+              })
+              .map(template => (
+                <Card key={template.id} className="bg-blue-50">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-medium">{template.name}</h3>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                        Recurring
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">{template.description}</p>
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={() => handleCreateTaskFromTemplate(template.id)}
+                      disabled={creatingTask === template.id}
+                      className="w-full"
+                    >
+                      {creatingTask === template.id ? "Creating..." : "Create Today's Task"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+          </div>
+          
+          {templates.filter(template => {
+            if (!template.recurring || !template.recurrence_rule) return false;
+            try {
+              const rule = JSON.parse(template.recurrence_rule);
+              return isTemplateMatchingToday(rule);
+            } catch (e) {
+              console.error('Error parsing recurrence rule:', e);
+              return false;
+            }
+          }).length === 0 && (
+            <Card>
+              <CardContent className="py-4 text-center text-gray-500">
+                No recurring tasks scheduled for today
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 } 

@@ -194,4 +194,79 @@ export function getNextOccurrenceDate(rule: RecurrenceRule, fromDate: Date = new
   }
   
   return nextDate;
+}
+
+// Function to check if a template matches today's date
+export function isTemplateMatchingToday(recurrenceRule: RecurrenceRule): boolean {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const currentDate = today.getDate();
+  const currentMonth = today.getMonth() + 1; // JavaScript months are 0-indexed
+
+  console.log('Checking template for today:', {
+    today: today.toISOString(),
+    currentDay,
+    currentDate,
+    currentMonth,
+    recurrenceRule
+  });
+
+  switch (recurrenceRule.frequency) {
+    case "daily":
+      return true;
+
+    case "weekly":
+    case "biweekly":
+      if (!recurrenceRule.byDay || recurrenceRule.byDay.length === 0) {
+        console.log('No days specified in weekly rule');
+        return false;
+      }
+      
+      const daysMap: Record<string, number> = {
+        SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6,
+        su: 0, mo: 1, tu: 2, we: 3, th: 4, fr: 5, sa: 6,
+        SUNDAY: 0, MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6,
+        sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+      };
+      
+      // For biweekly, we need to check if this is the correct week
+      if (recurrenceRule.frequency === "biweekly") {
+        const weekNumber = Math.floor(today.getDate() / 7);
+        if (weekNumber % 2 !== 0) {
+          console.log('Not the correct week for biweekly task');
+          return false;
+        }
+      }
+      
+      const matchingDay = recurrenceRule.byDay.some(day => {
+        const dayNumber = daysMap[day.toUpperCase()];
+        console.log('Checking day:', { day, dayNumber, currentDay });
+        return dayNumber === currentDay;
+      });
+
+      console.log('Weekly/biweekly match result:', matchingDay);
+      return matchingDay;
+
+    case "monthly":
+      if (!recurrenceRule.byMonthDay || recurrenceRule.byMonthDay.length === 0) {
+        console.log('No days specified in monthly rule');
+        return false;
+      }
+      const monthlyMatch = recurrenceRule.byMonthDay.includes(currentDate);
+      console.log('Monthly match result:', monthlyMatch);
+      return monthlyMatch;
+
+    case "yearly":
+      if (!recurrenceRule.byMonth || recurrenceRule.byMonth.length === 0) {
+        console.log('No months specified in yearly rule');
+        return false;
+      }
+      const yearlyMatch = recurrenceRule.byMonth.includes(currentMonth);
+      console.log('Yearly match result:', yearlyMatch);
+      return yearlyMatch;
+
+    default:
+      console.log('Unknown frequency:', recurrenceRule.frequency);
+      return false;
+  }
 } 

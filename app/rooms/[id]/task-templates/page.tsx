@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Plus, Trash, Edit, ListChecks, Calendar } from "lucide-react";
 import { getCurrentRoomie } from "@/app/actions/auth";
 import { getRoomById } from "@/app/actions/rooms";
-import { getTaskTemplates, deleteTaskTemplate, createTasksFromTemplate } from "@/app/actions/task-templates";
-import { Roomie, Room, TaskTemplate } from "@/lib/types";
+import { getTaskTemplates, deleteTaskTemplate, createTasksFromTemplate, createTaskFromTemplate } from "@/app/actions/task-templates";
+import { Roomie, Room, TaskTemplate, RecurrenceRule } from "@/lib/types";
+import { recurrenceRuleToString, isTemplateMatchingToday } from "@/lib/utils/recurring-tasks";
 
 export default function TaskTemplatesPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function TaskTemplatesPage({ params }: { params: Promise<{ id: st
   const [searchTerm, setSearchTerm] = useState("");
   const [processingTemplate, setProcessingTemplate] = useState<number | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState<number | null>(null);
+  const [creatingTask, setCreatingTask] = useState<number | null>(null);
   
   const { id } = use(params);
   const roomId = parseInt(id);
@@ -120,6 +122,32 @@ export default function TaskTemplatesPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const handleCreateTaskFromTemplate = async (templateId: number) => {
+    setCreatingTask(templateId);
+    setError(null);
+    
+    try {
+      const { success, error } = await createTaskFromTemplate(templateId);
+      
+      if (!success || error) {
+        setError(error || "Failed to create task from template");
+        setCreatingTask(null);
+        return;
+      }
+      
+      // Refresh the templates list
+      const { data: templatesData, error: templatesError } = await getTaskTemplates(roomId);
+      if (!templatesError && templatesData) {
+        setTemplates(templatesData);
+      }
+    } catch (e) {
+      console.error("Error creating task from template:", e);
+      setError("An unexpected error occurred");
+    } finally {
+      setCreatingTask(null);
+    }
+  };
+
   const filteredTemplates = templates.filter(template => 
     template.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     template.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -186,70 +214,89 @@ export default function TaskTemplatesPage({ params }: { params: Promise<{ id: st
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTemplates.map((template) => (
-            <Card key={template.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-lg">{template.name}</CardTitle>
-                  {template.recurring && (
-                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                      Recurring
-                    </span>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-700 mb-3">{template.description}</p>
-                <div className="flex flex-col gap-2 text-sm text-gray-600">
-                  <div className="flex items-center">
-                    <Calendar size={16} className="mr-2" />
-                    <span>Importance: {template.weight}</span>
+          {filteredTemplates.map((template) => {
+            const isMatchingToday = template.recurring && template.recurrence_rule && 
+              isTemplateMatchingToday(JSON.parse(template.recurrence_rule));
+            
+            return (
+              <Card key={template.id}>
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-lg">{template.name}</CardTitle>
+                    {template.recurring && (
+                      <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                        Recurring
+                      </span>
+                    )}
                   </div>
-                  
-                  {template.recurring && template.recurrence_rule && (
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-700 mb-3">{template.description}</p>
+                  <div className="flex flex-col gap-2 text-sm text-gray-600">
                     <div className="flex items-center">
-                      <ListChecks size={16} className="mr-2" />
-                      <span>Recurrence: {template.recurrence_rule.charAt(0).toUpperCase() + template.recurrence_rule.slice(1)}</span>
+                      <Calendar size={16} className="mr-2" />
+                      <span>Importance: {template.weight}</span>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <div className="flex space-x-2">
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleDeleteTemplate(template.id)}
-                    disabled={deletingTemplate === template.id}
-                    className="flex items-center gap-1"
-                  >
-                    <Trash size={14} />
-                    {deletingTemplate === template.id ? "Deleting..." : "Delete"}
-                  </Button>
-                  <Link href={`/rooms/${roomId}/task-templates/${template.id}/edit`}>
+                    
+                    {template.recurring && template.recurrence_rule && (
+                      <div className="flex items-center">
+                        <ListChecks size={16} className="mr-2" />
+                        <span>Recurrence: {recurrenceRuleToString(JSON.parse(template.recurrence_rule))}</span>
+                      </div>
+                    )}
+                    
+                    {isMatchingToday && (
+                      <div className="mt-2">
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => handleCreateTaskFromTemplate(template.id)}
+                          disabled={creatingTask === template.id}
+                          className="w-full"
+                        >
+                          {creatingTask === template.id ? "Creating..." : "Create Today's Task"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <div className="flex space-x-2">
                     <Button
-                      variant="outlined"
+                      variant="danger"
                       size="sm"
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      disabled={deletingTemplate === template.id}
                       className="flex items-center gap-1"
                     >
-                      <Edit size={14} />
-                      Edit
+                      <Trash size={14} />
+                      {deletingTemplate === template.id ? "Deleting..." : "Delete"}
                     </Button>
-                  </Link>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleCreateFromTemplate(template.id)}
-                  disabled={processingTemplate === template.id}
-                  className="flex items-center gap-1"
-                >
-                  <Plus size={14} />
-                  {processingTemplate === template.id ? "Creating..." : "Create Task"}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+                    <Link href={`/rooms/${roomId}/task-templates/${template.id}/edit`}>
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        className="flex items-center gap-1"
+                      >
+                        <Edit size={14} />
+                        Edit
+                      </Button>
+                    </Link>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleCreateFromTemplate(template.id)}
+                    disabled={processingTemplate === template.id}
+                    className="flex items-center gap-1"
+                  >
+                    <Plus size={14} />
+                    {processingTemplate === template.id ? "Creating..." : "Create Task"}
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

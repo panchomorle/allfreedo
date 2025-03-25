@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Room } from "@/lib/types";
+import { createAdminClient } from "@/utils/supabase/service-role";
 
 export async function createRoom(name: string, roomieId: number): Promise<{ data: Room | null; error: string | null }> {
   try {
@@ -122,10 +123,11 @@ export async function deleteRoom(id: number): Promise<{ success: boolean; error:
 
 export async function joinRoomByCode(accessCode: string, roomieId: number): Promise<{ success: boolean; error: string | null; roomId: number | null }> {
   try {
+    const supabaseAdmin = createAdminClient();
     const supabase = await createClient();
     
     // First, find the room with the given access code
-    const { data: room, error: roomError } = await supabase
+    const { data: room, error: roomError } = await supabaseAdmin
       .from("rooms")
       .select("id")
       .eq("access_code", accessCode)

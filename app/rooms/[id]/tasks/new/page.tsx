@@ -107,9 +107,9 @@ export default function NewTaskPage({ params }: { params: Promise<{ id: string }
         weight,
         is_done: false,
         scheduled_date: scheduledDate,
-        recurring: isRecurring,
-        recurrence_pattern: isRecurring ? recurrencePattern : null,
-        template_id: selectedTemplateId,
+        task_template_id: selectedTemplateId,
+        done_by: null,
+        done_date: null,
       });
       
       if (!data || error) {

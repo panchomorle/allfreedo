@@ -147,7 +147,7 @@ export async function createTaskFromTemplate(
 }
 
 export async function createTask(task: Omit<Task, 'id' | 'created_at'>): Promise<{ data: Task | null; error: string | null }> {
-  const { room_id, name, description, weight, assigned_roomie_id, scheduled_date, recurring, recurrence_pattern, template_id } = task;
+  const { room_id, name, description, weight, assigned_roomie_id, scheduled_date } = task;
 
   try {
     const supabase = await createClient();
@@ -160,11 +160,12 @@ export async function createTask(task: Omit<Task, 'id' | 'created_at'>): Promise
         description,
         weight,
         is_done: false,
+        done_date: null,
+        done_by: null,
         scheduled_date,
         assigned_roomie_id,
-        recurring,
-        recurrence_pattern,
-        template_id
+        task_template_id: null,
+        created_at: new Date().toISOString(),
       }])
       .select()
       .single();
@@ -225,7 +226,6 @@ export async function getTasks(
         success: false,
       };
     }
-
     return {
       data,
       success: true,
