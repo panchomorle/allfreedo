@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Task, Roomie } from "@/lib/types";
@@ -11,10 +11,11 @@ import { CheckCircle, AlertTriangle, Clock, Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StarRating } from "@/components/rating/star-rating";
 import { rateTaskCompletion } from "@/app/actions/task-ratings";
+import { useRoomies } from "@/contexts/roomies-context";
 
 interface TaskCardProps {
   task: Task;
-  assignedRoomie?: Roomie;
+  roomId: number;
   currentRoomieId?: number;
   onMarkDone?: () => Promise<void>;
   averageRating?: number | null;
@@ -23,7 +24,7 @@ interface TaskCardProps {
 
 export function TaskCard({
   task,
-  assignedRoomie,
+  roomId,
   currentRoomieId,
   onMarkDone,
   averageRating = null,
@@ -33,8 +34,15 @@ export function TaskCard({
   const [submittingRating, setSubmittingRating] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [markingDone, setMarkingDone] = useState(false);
+  const { roomies } = useRoomies(roomId);
+
+  const getRoomieById = (roomieId: number): Roomie | undefined => {
+    return roomies.find(roomie => roomie.id === roomieId);
+  };
+
+  const assignedRoomie = useMemo(() => getRoomieById(task.assigned_roomie_id), [task.assigned_roomie_id, roomies]);
   
-  const isAssignedToCurrentRoomie = assignedRoomie?.id === currentRoomieId;
+  const isAssignedToCurrentRoomie = task.assigned_roomie_id === currentRoomieId;
   const isOverdue = task.scheduled_date && new Date(task.scheduled_date) < new Date();
   
   const formattedDueDate = task.scheduled_date
@@ -80,10 +88,10 @@ export function TaskCard({
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-lg">{task.name}</CardTitle>
-          {task.recurring && (
+          {task.task_template_id && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Clock size={12} />
-              Recurring
+              From template
             </Badge>
           )}
         </div>
@@ -114,8 +122,8 @@ export function TaskCard({
           <div className="flex items-center mt-2">
             <Avatar className="h-6 w-6 mr-2">
               <AvatarFallback>{assignedRoomie.name.charAt(0)}</AvatarFallback>
-              {assignedRoomie.profile_image && (
-                <AvatarImage src={assignedRoomie.profile_image} alt={assignedRoomie.name} />
+              {assignedRoomie.avatar && (
+                <AvatarImage src={assignedRoomie.avatar} alt={assignedRoomie.name} />
               )}
             </Avatar>
             <span className="text-sm text-gray-600">
@@ -137,7 +145,7 @@ export function TaskCard({
         )}
       </CardContent>
       
-      {(!task.is_done && isAssignedToCurrentRoomie && onMarkDone) && (
+      {(!task.is_done && onMarkDone) && (
         <CardFooter className="pt-0">
           <Button 
             onClick={handleMarkDone} 

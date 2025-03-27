@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, use, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,11 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useUser } from "@/contexts/user-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useRoom } from "@/contexts/rooms-context";
+import { useRoomies } from "@/contexts/roomies-context";
 
 export default function RoomDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  const [room, setRoom] = useState<Room | null>(null);
-  const { roomie: currentRoomie, loading: userLoading } = useUser();
-  const [roomies, setRoomies] = useState<Roomie[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
@@ -30,41 +28,10 @@ export default function RoomDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const roomId = parseInt(id);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      if (!currentRoomie && !userLoading){
-        console.log("User not found, redirecting to sign-in");
-        console.log("roomie: ", currentRoomie);
-        console.log("userLoading: ", userLoading);
-        router.push("/sign-in"); return;}
-      // Get room details
-      const { data: roomData, error: roomError } = await getRoomById(roomId);
-      
-      if (roomError || !roomData) {
-        setError(roomError || "Failed to load room");
-        setLoading(false);
-        return;
-      }
-      
-      setRoom(roomData);
-      setEditedName(roomData.name);
-      
-      // Get roomies in the room
-      const { data: roomiesData, error: roomiesError } = await getRoomiesInRoom(roomId);
-      
-      if (roomiesError || !roomiesData) {
-        setError(roomiesError || "Failed to load roomies");
-        setLoading(false);
-        return;
-      }
-      
-      setRoomies(roomiesData);
-      setLoading(false);
-    };
-
-    loadData();
-  }, [roomId, router]);
+  const { room, loading: roomLoading, error: roomError } = useRoom(roomId);
+  const { roomies, loading: roomiesLoading } = useRoomies(roomId);
+  const { roomie: currentRoomie } = useUser();
+  const loading = useMemo(() => roomLoading || roomiesLoading, [roomLoading, roomiesLoading]);
 
   const handleEditToggle = () => {
     setIsEditing(!isEditing);
@@ -85,8 +52,9 @@ export default function RoomDetailPage({ params }: { params: Promise<{ id: strin
       return;
     }
     
-    // Update local state
-    setRoom({ ...room, name: editedName });
+    // Refresh room data in context
+    await useRoom(roomId).refreshRoom();
+    
     setIsEditing(false);
     setIsUpdating(false);
   };

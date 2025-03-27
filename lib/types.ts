@@ -3,7 +3,6 @@ export interface Room {
   name: string;
   description: string;
   access_code: string;
-  created_at: string;
   created_by: number;
 }
 
@@ -17,16 +16,16 @@ export interface Roomie {
 export interface Task {
   id: number;
   room_id: number;
+  task_template_id?: number | null;
   name: string;
   description: string;
-  assigned_roomie_id: number;
   weight: number;
   is_done: boolean;
-  done_date?: string | null;
-  done_by?: number | null;
   scheduled_date: string | null;
-  task_template_id?: number | null;
+  done_date?: string | null;
+  assigned_roomie_id: number;
   created_at: string;
+  done_by?: number | null;
 }
 
 export interface TaskTemplate {

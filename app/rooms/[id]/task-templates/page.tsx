@@ -7,16 +7,16 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Plus, Trash, Edit, ListChecks, Calendar } from "lucide-react";
-import { getCurrentRoomie } from "@/app/actions/auth";
 import { getRoomById } from "@/app/actions/rooms";
 import { getTaskTemplates, deleteTaskTemplate, createTasksFromTemplate, createTaskFromTemplate } from "@/app/actions/task-templates";
-import { Roomie, Room, TaskTemplate, RecurrenceRule } from "@/lib/types";
+import { Room, TaskTemplate } from "@/lib/types";
 import { recurrenceRuleToString, isTemplateMatchingToday } from "@/lib/utils/recurring-tasks";
+import { useUser } from "@/contexts/user-context";
+import { useRoomies } from "@/contexts/roomies-context";
 
 export default function TaskTemplatesPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [room, setRoom] = useState<Room | null>(null);
-  const [currentRoomie, setCurrentRoomie] = useState<Roomie | null>(null);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,22 +25,16 @@ export default function TaskTemplatesPage({ params }: { params: Promise<{ id: st
   const [deletingTemplate, setDeletingTemplate] = useState<number | null>(null);
   const [creatingTask, setCreatingTask] = useState<number | null>(null);
   
+  const { roomie } = useUser();
   const { id } = use(params);
   const roomId = parseInt(id);
+  const { roomies } = useRoomies(roomId);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       
       try {
-        // Get current roomie
-        const { roomie } = await getCurrentRoomie();
-        if (!roomie) {
-          router.push("/create-profile");
-          return;
-        }
-        setCurrentRoomie(roomie);
-        
         // Get room details
         const { data: roomData, error: roomError } = await getRoomById(roomId);
         
@@ -127,7 +121,7 @@ export default function TaskTemplatesPage({ params }: { params: Promise<{ id: st
     setError(null);
     
     try {
-      const { success, error } = await createTaskFromTemplate(templateId);
+      const { success, error } = await createTaskFromTemplate(templateId, roomId, roomie?.id || 0, new Date().toISOString().slice(0, 10), roomies);
       
       if (!success || error) {
         setError(error || "Failed to create task from template");

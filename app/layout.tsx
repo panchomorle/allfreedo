@@ -1,6 +1,9 @@
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { UserProvider } from "@/contexts/user-context";
+import { RoomiesProvider } from "@/contexts/roomies-context";
+import { RoomsProvider } from "@/contexts/rooms-context";
+import { TasksProvider } from "@/contexts/tasks-context";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -26,9 +29,15 @@ export default function RootLayout({
     <html lang="en" className={geistSans.className} suppressHydrationWarning>
       <body className="flex flex-col items-center justify-center h-screen">
           <UserProvider>
-            <div className="min-h-screen w-full">
-              {children}
-            </div>
+            <RoomsProvider>
+              <RoomiesProvider>
+                <TasksProvider>
+                  <div className="min-h-screen w-full">
+                    {children}
+                  </div>
+                </TasksProvider>
+              </RoomiesProvider>
+            </RoomsProvider>
           </UserProvider>
       </body>
     </html>

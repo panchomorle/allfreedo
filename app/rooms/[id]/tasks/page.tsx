@@ -1,174 +1,51 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { use, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar, ArrowLeft, ListChecks, ListPlus } from "lucide-react";
-import { getCurrentRoomie } from "@/app/actions/auth";
-import { getRoomById } from "@/app/actions/rooms";
-import { getTasks, markTaskAsDone, processRecurringTasks } from "@/app/actions/tasks";
-import { getTaskAverageRating, hasRoomieRatedTask } from "@/app/actions/task-ratings";
-import { getRoomiesInRoom } from "@/app/actions/roomies";
-import { getTaskTemplates, createTaskFromTemplate } from "@/app/actions/task-templates";
-import { Roomie, Room, Task, TaskTemplate, RecurrenceRule } from "@/lib/types";
+import { createTaskFromTemplate } from "@/app/actions/task-templates";
 import { TaskCard } from "@/components/task/task-card";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { isTemplateMatchingToday } from "@/lib/utils/recurring-tasks";
+import { useTasks } from "@/contexts/tasks-context";
+import { useRoom } from "@/contexts/rooms-context";
+import { useRoomies } from "@/contexts/roomies-context";
+import { useUser } from "@/contexts/user-context";
 
 export default function RoomTasksPage({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter();
-  const [room, setRoom] = useState<Room | null>(null);
-  const [currentRoomie, setCurrentRoomie] = useState<Roomie | null>(null);
-  const [roomies, setRoomies] = useState<Roomie[]>([]);
-  const [activeTasks, setActiveTasks] = useState<Task[]>([]);
-  const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [taskRatings, setTaskRatings] = useState<Record<number, number | null>>({});
-  const [hasRated, setHasRated] = useState<Record<number, boolean>>({});
-  const [refreshKey, setRefreshKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [creatingTask, setCreatingTask] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
   const { id } = use(params);
   const roomId = parseInt(id);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      
-      try {
-        // Get current roomie
-        const { roomie, error: roomieError } = await getCurrentRoomie();
-        
-        // Handle auth errors
-        if (roomieError?.includes('Auth session missing')) {
-          console.log('Auth session missing, redirecting to sign-in');
-          router.push("/sign-in");
-          return;
-        }
-        
-        if (!roomie) {
-          console.log('No roomie found, redirecting to create profile');
-          router.push("/create-profile");
-          return;
-        }
-        
-        setCurrentRoomie(roomie);
-        
-        // Get room details
-        const { data: roomData, error: roomError } = await getRoomById(roomId);
-        
-        if (roomError || !roomData) {
-          setError(roomError || "Failed to load room");
-          setLoading(false);
-          return;
-        }
-        
-        setRoom(roomData);
-        
-        // Process recurring tasks
-        await processRecurringTasks();
-        
-        // Get active tasks
-        const { data: activeTasksData, error: activeTasksError } = await getTasks(roomId, { completed: false });
-        
-        if (activeTasksError) {
-          setError(activeTasksError);
-          setLoading(false);
-          return;
-        }
-        
-        setActiveTasks(activeTasksData || []);
-        
-        // Get completed tasks
-        const { data: completedTasksData, error: completedTasksError } = await getTasks(roomId, { completed: true });
-        
-        if (completedTasksError) {
-          setError(completedTasksError);
-          setLoading(false);
-          return;
-        }
-        
-        setCompletedTasks(completedTasksData || []);
-        
-        // Get roomies
-        const { data: roomiesData } = await getRoomiesInRoom(roomId);
-        setRoomies(roomiesData || []);
-        
-        // Get task ratings
-        const allTasks = [...(activeTasksData || []), ...(completedTasksData || [])];
-        
-        const ratingsPromises = allTasks.map(async (task) => {
-          const { averageRating } = await getTaskAverageRating(task.id);
-          return { taskId: task.id, rating: averageRating };
-        });
-        
-        const hasRatedPromises = allTasks.map(async (task) => {
-          if (!roomie || !task.is_done) return { taskId: task.id, hasRated: false };
-          const { hasRated } = await hasRoomieRatedTask(task.id, roomie.id);
-          return { taskId: task.id, hasRated };
-        });
-        
-        const ratingsResults = await Promise.all(ratingsPromises);
-        const hasRatedResults = await Promise.all(hasRatedPromises);
-        
-        const ratingsMap: Record<number, number | null> = {};
-        const hasRatedMap: Record<number, boolean> = {};
-        
-        ratingsResults.forEach(({ taskId, rating }) => {
-          ratingsMap[taskId] = rating;
-        });
-        
-        hasRatedResults.forEach(({ taskId, hasRated }) => {
-          hasRatedMap[taskId] = hasRated;
-        });
-        
-        setTaskRatings(ratingsMap);
-        setHasRated(hasRatedMap);
-        
-        // Get task templates
-        const { data: templatesData, error: templatesError } = await getTaskTemplates(roomId);
-        if (!templatesError && templatesData) {
-          console.log('Loaded templates:', templatesData);
-          setTemplates(templatesData);
-        }
-        
-        setLoading(false);
-      } catch (e) {
-        console.error("Error loading data:", e);
-        // Check if it's an auth error
-        if (e instanceof Error && e.message.includes('Auth session missing')) {
-          console.log('Auth session missing, redirecting to sign-in');
-          router.push("/sign-in");
-          return;
-        }
-        setError("An unexpected error occurred");
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [roomId, router, refreshKey]);
+  // Use contexts
+  const { room, loading: roomLoading, error: roomError } = useRoom(roomId);
+  const { roomies, loading: roomiesLoading } = useRoomies(roomId);
+  const { 
+    activeTasks, 
+    completedTasks, 
+    templates, 
+    taskRatings, 
+    hasRated, 
+    loading: tasksLoading,
+    error: tasksError,
+    markTaskAsDone,
+    processRecurringTasks
+  } = useTasks(roomId);
+  const { roomie: currentRoomie } = useUser();
 
   const handleMarkDone = async (taskId: number) => {
-    const { success, error: markError } = await markTaskAsDone(taskId);
-    
-    if (!success || markError) {
-      setError(markError || "Failed to mark task as done");
-      return;
+    try {
+      await markTaskAsDone(taskId);
+    } catch (e) {
+      console.error("Error marking task as done:", e);
+      setError("Failed to mark task as done");
     }
-    
-    // Refresh the data
-    setRefreshKey(prev => prev + 1);
-  };
-
-  const getRoomieById = (roomieId: number): Roomie | undefined => {
-    return roomies.find(roomie => roomie.id === roomieId);
   };
 
   const filteredActiveTasks = activeTasks.filter(task => 
@@ -186,7 +63,13 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
     setError(null);
     
     try {
-      const { success, error } = await createTaskFromTemplate(templateId);
+      const { success, error } = await createTaskFromTemplate(
+        templateId,
+        roomId,
+        currentRoomie?.id || 0,
+        new Date().toISOString().slice(0, 10),
+        roomies
+      );
       
       if (!success || error) {
         setError(error || "Failed to create task from template");
@@ -194,8 +77,8 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
         return;
       }
       
-      // Refresh the data
-      setRefreshKey(prev => prev + 1);
+      // Refresh tasks
+      await processRecurringTasks();
     } catch (e) {
       console.error("Error creating task from template:", e);
       setError("An unexpected error occurred");
@@ -204,7 +87,7 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
     }
   };
 
-  if (loading) {
+  if (roomLoading || tasksLoading || roomiesLoading) {
     return (
       <div className="container mx-auto py-8">
         <h1 className="text-2xl font-bold mb-6">Loading tasks...</h1>
@@ -212,7 +95,7 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
     );
   }
 
-  if (!room) {
+  if (roomError || tasksError || !room) {
     return (
       <div className="container mx-auto py-8">
         <h1 className="text-2xl font-bold mb-6">Room not found</h1>
@@ -283,15 +166,17 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
             {filteredActiveTasks.map((task) => (
               <TaskCard
                 key={task.id}
+                roomId={roomId}
                 task={task}
-                assignedRoomie={getRoomieById(task.assigned_roomie_id)}
-                currentRoomieId={currentRoomie?.id}
+                currentRoomieId={currentRoomie?.id || undefined}
                 onMarkDone={() => handleMarkDone(task.id)}
+                averageRating={taskRatings[task.id] || undefined}
+                hasRated={hasRated[task.id] || false}
               />
             ))}
           </div>
         )}
-      </div>
+      </div>  
       
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -321,10 +206,11 @@ export default function RoomTasksPage({ params }: { params: Promise<{ id: string
                 <TaskCard
                   key={task.id}
                   task={task}
-                  assignedRoomie={getRoomieById(task.assigned_roomie_id)}
-                  currentRoomieId={currentRoomie?.id}
-                  averageRating={taskRatings[task.id]}
-                  hasRated={hasRated[task.id]}
+                  roomId={roomId}
+                  currentRoomieId={currentRoomie?.id || undefined}
+                  onMarkDone={() => handleMarkDone(task.id)}
+                  averageRating={taskRatings[task.id] || undefined}
+                  hasRated={hasRated[task.id] || false}
                 />
               ))}
             </div>

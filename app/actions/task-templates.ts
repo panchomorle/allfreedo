@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
-import { ResponseData, TaskTemplate, Task } from "@/lib/types";
+import { ResponseData, TaskTemplate, Task, Roomie } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { createTask } from "./tasks";
 import { getRoomiesInRoom } from "./roomies";
@@ -318,7 +318,7 @@ export async function hasTaskBeenCreatedToday(templateId: number): Promise<boole
   }
 }
 
-export async function createTaskFromTemplate(templateId: number): Promise<{ success: boolean; error: string | null }> {
+export async function createTaskFromTemplate(templateId: number, roomId: number, roomieId: number, scheduledDate: string, roomies: Roomie[]): Promise<{ success: boolean; error: string | null }> {
   const supabase = await createClient();
   try {
     // First check if a task has already been created today
@@ -338,22 +338,6 @@ export async function createTaskFromTemplate(templateId: number): Promise<{ succ
       return { success: false, error: 'Template not found' };
     }
 
-    // Get the current roomie
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return { success: false, error: 'User not authenticated' };
-    }
-
-    const { data: roomie, error: roomieError } = await supabase
-      .from('roomies')
-      .select('id')
-      .eq('auth_uuid', user.id)
-      .single();
-
-    if (roomieError || !roomie) {
-      return { success: false, error: 'Roomie not found' };
-    }
-
     // Create the task
     const { error: insertError } = await supabase
       .from('tasks')
@@ -363,8 +347,8 @@ export async function createTaskFromTemplate(templateId: number): Promise<{ succ
         name: template.name,
         description: template.description,
         weight: template.weight,
-        scheduled_date: new Date().toISOString(),
-        assigned_roomie_id: roomie.id
+        scheduled_date: scheduledDate,
+        assigned_roomie_id: roomieId
       });
 
     if (insertError) {
