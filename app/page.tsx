@@ -8,6 +8,9 @@ import { getRoomiesInRoom } from "@/app/actions/roomies";
 import { RoomCard } from "@/components/room/room-card";
 import { AuthButton } from "@/components/buttons/auth-button";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function Dashboard() {
   try {
     // Fetch rooms the user is a member of
@@ -49,22 +52,29 @@ export default async function Dashboard() {
         {(!rooms || rooms.length === 0) ? (
           <Card>
             <CardHeader>
-              <CardTitle>Welcome to AllFreedo</CardTitle>
+              <CardTitle>Welcome to Roomboard!</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-4">You don't have any rooms yet. Create your first room to get started!</p>
-              <Link href="/rooms/new">
-                <Button>Create Your First Room</Button>
-              </Link>
+              <p className="mb-4">
+                You haven't joined any rooms yet. Create a new room or join an existing one to get started.
+              </p>
+              <div className="flex gap-4">
+                <Link href="/rooms/new">
+                  <Button variant="success">Create Room</Button>
+                </Link>
+                <Link href="/rooms/join">
+                  <Button variant="outlined">Join Room</Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => (
-              <RoomCard 
-                key={room.id} 
-                room={room} 
-                roomiesCount={roomiesCountMap[room.id] || 0}
+              <RoomCard
+                key={room.id}
+                room={room}
+                roomiesCount={roomiesCountMap[room.id]}
               />
             ))}
           </div>
@@ -72,7 +82,13 @@ export default async function Dashboard() {
       </div>
     );
   } catch (error) {
-    console.error('Error in Dashboard:', error);
-    throw error;
+    console.error('Error fetching rooms:', error);
+    return (
+      <div className="container mx-auto py-8">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          An error occurred while loading the dashboard. Please try again later.
+        </div>
+      </div>
+    );
   }
 }

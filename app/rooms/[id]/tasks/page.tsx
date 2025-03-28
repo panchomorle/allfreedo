@@ -33,7 +33,7 @@ async function getInitialData(roomId: number) {
 
 export const revalidate = 0; // Revalidate on every request
 
-export default async function RoomTasksPage({ params }: { params: { id: string } }) {
+export default async function RoomTasksPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const roomId = parseInt(id);
   const { room, tasks, templates } = await getInitialData(roomId);

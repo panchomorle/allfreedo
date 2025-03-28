@@ -28,12 +28,10 @@ async function getInitialData(roomId: number) {
 
 export const revalidate = 0; // Revalidate on every request
 
-export default async function TaskTemplatesPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function TaskTemplatesPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const roomId = parseInt(id);
   const { room, templates } = await getInitialData(roomId);
-
-  console.log('Rendering TaskTemplatesPage with:', { room, templates });
 
   return (
     <div className="container py-6 space-y-6">
