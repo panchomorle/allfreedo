@@ -5,6 +5,7 @@ import { Task, TaskTemplate } from "@/lib/types";
 import { getTasks, markTaskAsDone, processRecurringTasks } from "@/app/actions/tasks";
 import { getTaskTemplates } from "@/app/actions/task-templates";
 import { getTaskAverageRating, hasRoomieRatedTask } from "@/app/actions/task-ratings";
+import { useUser } from "@/contexts/user-context";
 
 interface TasksContextType {
   tasksByRoom: Record<number, {
@@ -45,6 +46,7 @@ const initialRoomState: RoomState = {
 
 export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [tasksByRoom, setTasksByRoom] = useState<Record<number, RoomState>>({});
+  const { roomie:currentRoomie } = useUser();
 
   const fetchTasks = async (roomId: number) => {
     // Initialize room state if it doesn't exist
@@ -152,7 +154,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
   const handleMarkTaskAsDone = async (taskId: number) => {
     try {
-      const { success, error } = await markTaskAsDone(taskId);
+      const { success, error } = await markTaskAsDone(taskId, currentRoomie?.id || -1);
       
       if (!success || error) {
         throw new Error(error || "Failed to mark task as done");

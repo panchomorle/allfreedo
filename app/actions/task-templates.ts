@@ -302,16 +302,19 @@ export async function hasTaskBeenCreatedToday(templateId: number): Promise<boole
       .from('tasks')
       .select('id')
       .eq('task_template_id', templateId)
-      .gte('scheduled_date', today.toISOString())
-      .lt('scheduled_date', tomorrow.toISOString())
-      .single();
+      .gte('scheduled_date', today.toISOString().slice(0, 10))
+      .lt('scheduled_date', tomorrow.toISOString().slice(0, 10));
 
     if (error) {
       console.error('Error checking task creation:', error);
       return false;
     }
 
-    return !!data;
+    if(data && data.length > 0) {
+      return true;
+    }
+
+    return false;
   } catch (error) {
     console.error('Error checking task creation:', error);
     return false;

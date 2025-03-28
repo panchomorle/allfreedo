@@ -123,9 +123,7 @@ export async function createTaskFromTemplate(
       weight: template.weight,
       is_done: false,
       scheduled_date: scheduledDate.toISOString(),
-      recurring: template.recurring,
-      recurrence_rule: template.recurrence_rule,
-      template_id: templateId
+      task_template_id: templateId
     };
     
     const { data, error } = await supabase
@@ -200,7 +198,7 @@ export async function getTasks(
       .from("tasks")
       .select("*")
       .eq("room_id", roomId)
-      .order("scheduled_date", { ascending: true });
+      .order("scheduled_date", { ascending: false });
 
     if (filters.completed !== undefined) {
       query = query.eq("is_done", filters.completed);
@@ -269,8 +267,15 @@ export async function getTaskById(taskId: number): Promise<ResponseData<Task>> {
   }
 }
 
-export async function markTaskAsDone(taskId: number): Promise<ResponseData<Task>> {
+export async function markTaskAsDone(taskId: number, currentRoomieId: number): Promise<ResponseData<Task>> {
   try {
+
+    if (currentRoomieId === -1) {
+      return {
+        error: "Invalid roomie ID",
+        success: false,
+      };
+    }
     const supabase = await createClient();
     
     // First get the task to know the room_id for path revalidation
@@ -292,6 +297,7 @@ export async function markTaskAsDone(taskId: number): Promise<ResponseData<Task>
       .update({
         is_done: true,
         done_date: new Date().toISOString(),
+        done_by: currentRoomieId,
       })
       .eq("id", taskId)
       .select()

@@ -1,185 +1,233 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
+import React, { useMemo, useState, useEffect } from "react";
+import { format } from "date-fns";
 import { Task, Roomie } from "@/lib/types";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertTriangle, Clock, Star } from "lucide-react";
+import { CheckCircle, AlertTriangle, Clock, Star, Calendar, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { StarRating } from "@/components/rating/star-rating";
-import { rateTaskCompletion } from "@/app/actions/task-ratings";
 import { useRoomies } from "@/contexts/roomies-context";
+import { useUser } from "@/contexts/user-context";
+import { rateTaskCompletion, getTaskAverageRating, hasRoomieRatedTask } from "@/app/actions/task-ratings";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TaskCardProps {
   task: Task;
   roomId: number;
-  currentRoomieId?: number;
   onMarkDone?: () => Promise<void>;
-  averageRating?: number | null;
-  hasRated?: boolean;
+  onDelete?: () => Promise<void>;
 }
 
-export function TaskCard({
-  task,
-  roomId,
-  currentRoomieId,
-  onMarkDone,
-  averageRating = null,
-  hasRated = false,
-}: TaskCardProps) {
+export function TaskCard({ task, roomId, onMarkDone, onDelete }: TaskCardProps) {
+  const { roomie: currentRoomie } = useUser();
+  const { roomies } = useRoomies(roomId);
   const [rating, setRating] = useState<number | null>(null);
+  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [hasRated, setHasRated] = useState(false);
   const [submittingRating, setSubmittingRating] = useState(false);
   const [ratingError, setRatingError] = useState<string | null>(null);
   const [markingDone, setMarkingDone] = useState(false);
-  const { roomies } = useRoomies(roomId);
+  const [deletingTask, setDeletingTask] = useState(false);
 
   const getRoomieById = (roomieId: number): Roomie | undefined => {
-    return roomies.find(roomie => roomie.id === roomieId);
+    return roomies?.find(roomie => roomie.id === roomieId);
   };
 
   const assignedRoomie = useMemo(() => getRoomieById(task.assigned_roomie_id), [task.assigned_roomie_id, roomies]);
+  const completedByRoomie = useMemo(() => task.done_by ? getRoomieById(task.done_by) : undefined, [task.done_by, roomies]);
   
-  const isAssignedToCurrentRoomie = task.assigned_roomie_id === currentRoomieId;
+  const isAssignedToCurrentRoomie = task.assigned_roomie_id === currentRoomie?.id;
   const isOverdue = task.scheduled_date && new Date(task.scheduled_date) < new Date();
   
   const formattedDueDate = task.scheduled_date
-    ? formatDistanceToNow(new Date(task.scheduled_date), { addSuffix: true })
+    ? format(new Date(task.scheduled_date), 'MMM d, yyyy')
     : "No due date";
-  
-  const handleRateTask = async (value: number) => {
-    if (!currentRoomieId || !task.is_done) return;
-    
-    setRating(value);
+
+  const formattedDoneDate = task.done_date
+    ? format(new Date(task.done_date), 'MMM d, yyyy')
+    : null;
+
+  useEffect(() => {
+    const loadRatings = async () => {
+      if (!task.is_done || !currentRoomie) return;
+
+      try {
+        const [avgRating, userRating] = await Promise.all([
+          getTaskAverageRating(task.id),
+          hasRoomieRatedTask(task.id, currentRoomie.id)
+        ]);
+
+        setAverageRating(avgRating.averageRating);
+        setHasRated(userRating.hasRated);
+      } catch (error) {
+        console.error('Error loading ratings:', error);
+      }
+    };
+
+    loadRatings();
+  }, [task.id, task.is_done, currentRoomie]);
+
+  const handleRating = async (value: number) => {
+    if (!currentRoomie) return;
+
     setSubmittingRating(true);
     setRatingError(null);
-    
+
     try {
-      const { success, error } = await rateTaskCompletion(task.id, currentRoomieId, value);
-      
-      if (!success || error) {
-        setRatingError(error || "Failed to submit rating");
+      const result = await rateTaskCompletion(task.id, currentRoomie.id, value);
+      if (!result.success) {
+        throw new Error(result.error);
       }
-    } catch (e) {
-      setRatingError("An unexpected error occurred");
+
+      setRating(value);
+      setHasRated(true);
+      
+      // Refresh average rating
+      const avgRating = await getTaskAverageRating(task.id);
+      setAverageRating(avgRating.averageRating);
+    } catch (error) {
+      setRatingError(error instanceof Error ? error.message : 'Failed to submit rating');
     } finally {
       setSubmittingRating(false);
     }
   };
-  
+
   const handleMarkDone = async () => {
     if (!onMarkDone) return;
-    
+
     setMarkingDone(true);
-    await onMarkDone();
-    setMarkingDone(false);
+    try {
+      await onMarkDone();
+    } finally {
+      setMarkingDone(false);
+    }
   };
-  
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+
+    setDeletingTask(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeletingTask(false);
+    }
+  };
+
   return (
-    <Card className={`overflow-hidden border-l-4 ${
-      task.is_done
-        ? "border-l-green-500"
-        : isOverdue
-        ? "border-l-red-500"
-        : "border-l-blue-500"
-    }`}>
+    <Card className={task.is_done ? "bg-gray-50" : undefined}>
       <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-lg">{task.name}</CardTitle>
-          {task.task_template_id && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              <Clock size={12} />
-              From template
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center text-sm text-gray-500 mt-1">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between">
+            <span>{task.name}</span>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleDelete}
+                disabled={deletingTask}
+              >
+                <Trash2 className="h-4 w-4 text-red-500 hover:text-red-600" />
+              </Button>
+            </div>
+          </CardTitle>
           {task.is_done ? (
-            <div className="flex items-center text-green-600">
-              <CheckCircle size={14} className="mr-1" />
-              Completed
-            </div>
+            <CheckCircle className="h-5 w-5 text-green-500" />
           ) : isOverdue ? (
-            <div className="flex items-center text-red-600">
-              <AlertTriangle size={14} className="mr-1" />
-              Due {formattedDueDate}
-            </div>
+            <AlertTriangle className="h-5 w-5 text-yellow-500" />
           ) : (
-            <div className="flex items-center">
-              <Clock size={14} className="mr-1" />
-              Due {formattedDueDate}
-            </div>
+            <Clock className="h-5 w-5 text-gray-400" />
           )}
         </div>
       </CardHeader>
-      
-      <CardContent>
-        <p className="text-sm text-gray-700 mb-3">{task.description}</p>
-        
-        {assignedRoomie && (
-          <div className="flex items-center mt-2">
-            <Avatar className="h-6 w-6 mr-2">
-              <AvatarFallback>{assignedRoomie.name.charAt(0)}</AvatarFallback>
-              {assignedRoomie.avatar && (
-                <AvatarImage src={assignedRoomie.avatar} alt={assignedRoomie.name} />
-              )}
-            </Avatar>
-            <span className="text-sm text-gray-600">
-              Assigned to {assignedRoomie.name}
-              {isAssignedToCurrentRoomie && " (You)"}
-            </span>
-          </div>
+      <CardContent className="space-y-2">
+        {task.description && (
+          <p className="text-sm text-gray-600">{task.description}</p>
         )}
-        
-        {task.is_done && averageRating !== null && (
-          <div className="flex items-center mt-3">
-            <Star size={16} className="text-yellow-500 mr-1" />
-            <span className="text-sm">
-              {averageRating > 0 
-                ? `Average rating: ${averageRating.toFixed(1)} / 5`
-                : "No ratings yet"}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Calendar className="h-4 w-4" />
+          <span>{formattedDueDate}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {assignedRoomie && (
+            <Badge variant={isAssignedToCurrentRoomie ? "default" : "secondary"}>
+              Assigned to: {assignedRoomie.name}
+            </Badge>
+          )}
+          {task.weight > 0 && (
+            <Badge variant="outline">Difficulty: {task.weight}</Badge>
+          )}
+        </div>
       </CardContent>
-      
-      {(!task.is_done && onMarkDone) && (
-        <CardFooter className="pt-0">
-          <Button 
-            onClick={handleMarkDone} 
-            disabled={markingDone}
-            className="w-full"
-            size="sm"
-          >
-            {markingDone ? "Marking as done..." : "Mark as done"}
-          </Button>
-        </CardFooter>
-      )}
-      
-      {(task.is_done && currentRoomieId && !hasRated) && (
-        <CardFooter className="pt-0 flex-col items-start">
-          <div className="w-full">
-            <p className="text-sm font-medium mb-1">Rate this task:</p>
-            <StarRating
-              value={rating}
-              onChange={handleRateTask}
-              disabled={submittingRating}
-            />
-            
-            {ratingError && (
-              <p className="text-red-500 text-xs mt-1">{ratingError}</p>
+      <CardFooter className="flex flex-col gap-4">
+        {task.is_done ? (
+          <div className="w-full space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Completed by:</span>
+                {completedByRoomie && (
+                  <Badge variant="outline">{completedByRoomie.name}</Badge>
+                )}
+                <span className="text-sm text-gray-500">on {formattedDoneDate}</span>
+              </div>
+            </div>
+            {currentRoomie && task.done_by !== currentRoomie.id && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Rate completion:</span>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <TooltipProvider key={value}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleRating(value)}
+                            disabled={submittingRating || hasRated}
+                          >
+                            <Star
+                              className={`h-4 w-4 ${
+                                (rating || 0) >= value
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-300"
+                              }`}
+                            />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Rate {value} star{value !== 1 ? 's' : ''}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
+                {hasRated && (
+                  <span className="text-sm text-gray-500">
+                    Average rating: {averageRating?.toFixed(1) || "N/A"}
+                  </span>
+                )}
+                {ratingError && (
+                  <span className="text-sm text-red-500">{ratingError}</span>
+                )}
+              </div>
             )}
           </div>
-        </CardFooter>
-      )}
-      
-      {(task.is_done && hasRated) && (
-        <CardFooter className="pt-0">
-          <p className="text-sm text-gray-500">You've rated this task</p>
-        </CardFooter>
-      )}
+        ) : (
+          <div className="w-full">
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={handleMarkDone}
+              disabled={!isAssignedToCurrentRoomie || markingDone}
+            >
+              {markingDone ? "Marking as done..." : "Mark as done"}
+            </Button>
+          </div>
+        )}
+      </CardFooter>
     </Card>
   );
-} 
+}
