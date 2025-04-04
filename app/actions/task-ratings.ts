@@ -98,26 +98,26 @@ export async function getTaskAverageRating(
 export async function hasRoomieRatedTask(
   taskId: number,
   roomieId: number
-): Promise<{ hasRated: boolean }> {
+): Promise<{ hasRated: boolean; rating: number | null }> {
   try {
     const supabase = await createClient();
 
     const { data, error } = await supabase
       .from("task_ratings")
-      .select("id")
+      .select("rating")
       .eq("task_id", taskId)
       .eq("roomie_id", roomieId)
       .single();
 
     if (error && error.code !== "PGRST116") {
       console.error("Error checking if roomie rated task:", error);
-      return { hasRated: false };
+      return { hasRated: false , rating: null};
     }
 
-    return { hasRated: !!data };
+    return { hasRated: !!data, rating: data ? data.rating : null };
   } catch (error) {
     console.error("Error in hasRoomieRatedTask:", error);
-    return { hasRated: false };
+    return { hasRated: false, rating: null };
   }
 }
 

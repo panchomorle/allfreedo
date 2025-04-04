@@ -12,6 +12,7 @@ import { useRoomies } from "@/contexts/roomies-context";
 import { useUser } from "@/contexts/user-context";
 import { rateTaskCompletion, getTaskAverageRating, hasRoomieRatedTask } from "@/app/actions/task-ratings";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TaskDetails } from "./task-details";
 
 interface TaskCardProps {
   task: Task;
@@ -40,14 +41,6 @@ export function TaskCard({ task, roomId, onMarkDone, onDelete }: TaskCardProps) 
   
   const isAssignedToCurrentRoomie = task.assigned_roomie_id === currentRoomie?.id;
   const isOverdue = task.scheduled_date && new Date(task.scheduled_date) < new Date();
-  
-  const formattedDueDate = task.scheduled_date
-    ? format(new Date(task.scheduled_date), 'MMM d, yyyy')
-    : "No due date";
-
-  const formattedDoneDate = task.done_date
-    ? format(new Date(task.done_date), 'MMM d, yyyy')
-    : null;
 
   useEffect(() => {
     const loadRatings = async () => {
@@ -61,6 +54,9 @@ export function TaskCard({ task, roomId, onMarkDone, onDelete }: TaskCardProps) 
 
         setAverageRating(avgRating.averageRating);
         setHasRated(userRating.hasRated);
+        if (userRating.hasRated) {
+          setRating(userRating.rating);
+        }
       } catch (error) {
         console.error('Error loading ratings:', error);
       }
@@ -143,75 +139,69 @@ export function TaskCard({ task, roomId, onMarkDone, onDelete }: TaskCardProps) 
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {task.description && (
-          <p className="text-sm text-gray-600">{task.description}</p>
-        )}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Calendar className="h-4 w-4" />
-          <span>{formattedDueDate}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {assignedRoomie && (
-            <Badge variant={isAssignedToCurrentRoomie ? "default" : "secondary"}>
-              Assigned to: {assignedRoomie.name}
-            </Badge>
-          )}
-          {task.weight > 0 && (
-            <Badge variant="outline">Difficulty: {task.weight}</Badge>
-          )}
-        </div>
+        <TaskDetails task={task} assignedRoomie={assignedRoomie} completedByRoomie={completedByRoomie} />
       </CardContent>
       <CardFooter className="flex flex-col gap-4">
         {task.is_done ? (
           <div className="w-full space-y-2">
-            <div className="flex items-center justify-between">
+            {currentRoomie && task.done_by !== currentRoomie.id ? (
+              <>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Completed by:</span>
-                {completedByRoomie && (
-                  <Badge variant="outline">{completedByRoomie.name}</Badge>
-                )}
-                <span className="text-sm text-gray-500">on {formattedDoneDate}</span>
-              </div>
-            </div>
-            {currentRoomie && task.done_by !== currentRoomie.id && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Rate completion:</span>
+                <span className="text-sm text-gray-500">{hasRated ? "Rated: " : "Rate: "}</span>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((value) => (
                     <TooltipProvider key={value}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleRating(value)}
-                            disabled={submittingRating || hasRated}
-                          >
-                            <Star
-                              className={`h-4 w-4 ${
-                                (rating || 0) >= value
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-gray-300"
-                              }`}
-                            />
-                          </Button>
+                          {hasRated ? (
+                              <Star
+                                className={`h-6 w-6 ${
+                                  value <= (rating || 0)
+                                    ? "fill-yellow-400 text-yellow-400"
+                                    : "text-gray-300"
+                                }`}
+                              />
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleRating(value)}
+                              disabled={submittingRating}
+                            >
+                              <Star
+                                className={`h-6 w-6 ${
+                                  (rating || 0) >= value
+                                    ? "fill-yellow-400 text-yellow-400"
+                                    : "text-gray-300"
+                                }`} size={4}
+                              />
+                            </Button>
+                          )}
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Rate {value} star{value !== 1 ? 's' : ''}</p>
+                          {hasRated 
+                            ? <p>Rated {rating} star{rating !== 1 ? 's' : ''}</p>
+                            : <p>Rate {value} star{value !== 1 ? 's' : ''}</p>
+                          }
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   ))}
                 </div>
-                {hasRated && (
-                  <span className="text-sm text-gray-500">
-                    Average rating: {averageRating?.toFixed(1) || "N/A"}
-                  </span>
-                )}
-                {ratingError && (
-                  <span className="text-sm text-red-500">{ratingError}</span>
-                )}
+                <span className="text-sm text-gray-500">
+                  Average: {averageRating?.toFixed(1) || "N/A"}
+                </span>
+              </div>
+              {ratingError && (
+                <span className="text-sm text-red-500">{ratingError}</span>
+              )}
+              </>
+            ) : currentRoomie && task.done_by === currentRoomie.id && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  Average rating: {averageRating?.toFixed(1) || "N/A"}
+                </span>
               </div>
             )}
           </div>
