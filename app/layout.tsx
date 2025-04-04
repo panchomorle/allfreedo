@@ -11,8 +11,70 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
+  title: "Allfreedo | Collaborative Task Management",
+  description: "A collaborative task management tool for teams and roommates.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
+  openGraph: {
+    title: "Allfreedo | Collaborative Task Management",
+    description: "A collaborative task management tool for teams and roommates.",
+    url: defaultUrl,
+    siteName: "Allfreedo",
+    images: [
+      {
+        url: `${defaultUrl}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: "Allfreedo",
+      },
+    ],
+    locale: "en-US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Allfreedo | Collaborative Task Management",
+    description: "A collaborative task management tool for teams and roommates.",
+    images: [`${defaultUrl}/og-image.png`],
+    creator: "@allfreedo",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    nocache: false,
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Allfreedo",
+    statusBarStyle: "default",
+    startupImage: "/apple-touch-startup-image.png",
+  },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    minimalUi: true,
+  },
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  alternates: {
+    canonical: defaultUrl,
+    languages: {
+      "en-US": defaultUrl,
+      "es-ES": `${defaultUrl}/es`,
+    },
+  }
 };
 
 const geistSans = Geist({
